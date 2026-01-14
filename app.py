@@ -91,7 +91,7 @@ if uploaded_file:
     with torch.no_grad():
         output = cancer_model(input_tensor)
         prob = torch.sigmoid(output).item()
-    prediction = "Malignant" if prob > 0.9998648 else "Benign"
+    prediction = "Malignant" if prob > 0.5 else "Benign"
     st.subheader(f"Prediction: **{prediction}**")
     st.write(f"Confidence: **{prob:.2f}**")
 
