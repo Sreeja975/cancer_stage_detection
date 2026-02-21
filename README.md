@@ -11,7 +11,7 @@ AI assistant.
 
 ### 🔁 System Flowchart
 
-![Workflow Flowchart]![flowchart](https://github.com/user-attachments/assets/04fec1a0-a9fa-4cee-9c49-c8f97c08cecc)
+![flowchart](https://github.com/user-attachments/assets/04fec1a0-a9fa-4cee-9c49-c8f97c08cecc)
 
 
 
@@ -22,7 +22,7 @@ AI assistant.
 Below is a sample interface output showing prediction, TNM stage, and AI
 interaction:
 
-![Sample Output]<img width="403" height="397" alt="output" src="https://github.com/user-attachments/assets/05a410dd-0c55-4f1c-b8ae-18d70f5e2b8d" />
+<img width="403" height="397" alt="output" src="https://github.com/user-attachments/assets/05a410dd-0c55-4f1c-b8ae-18d70f5e2b8d" />
 
 
 ------------------------------------------------------------------------
@@ -32,7 +32,7 @@ interaction:
 Grad-CAM highlights the important tumor regions influencing the model's
 decision:
 
-![Grad-CAM Result]![gradcam](https://github.com/user-attachments/assets/6db3f3c0-794b-482d-ac4a-bd2482322712)
+![gradcam](https://github.com/user-attachments/assets/6db3f3c0-794b-482d-ac4a-bd2482322712)
 
 
 ------------------------------------------------------------------------
