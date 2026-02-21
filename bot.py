@@ -1,35 +1,41 @@
-# bot.py
 import pyttsx3
-import uuid
-from gtts import gTTS
-import tempfile
-import base64
-import speech_recognition as sr
-import time
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
 import os
 
 engine = pyttsx3.init()
 engine.setProperty('rate',150)
 
+
+from gtts import gTTS
+import tempfile
+
 def text_to_speech(text):
-    filename = f"response_{uuid.uuid4().hex}.mp3"
-    tts = gTTS(text=text, lang="en")
+    tts = gTTS(text)
+    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+    filename = tmp_file.name
+    tmp_file.close()
+
     tts.save(filename)
     return filename
 
-def speak(text):
-    try:
-        engine.stop()
-        engine.say(text)
-        engine.runAndWait()
-    except:
-        pass
+def cleanup_audio():
+    pass
 
+
+
+# -------------------- VOICE ENGINE --------------------
+engine = pyttsx3.init()
+engine.setProperty('rate', 150)
+
+def speak(text):
+    engine.stop()
+    engine.say(text)
+    engine.runAndWait()
+
+
+# -------------------- KNOWLEDGE BASE --------------------
 knowledge = {
 
-# BASIC
+# BASIC¸
 "breast cancer":"Breast cancer is a disease in which abnormal cells grow uncontrollably in the breast tissue and form tumors.",
 "breast":"Breast produces milk for feeding babies and contains glands, ducts and fatty tissue.",
 "how cancer starts":"Cancer starts when normal cells mutate and grow without control.",
@@ -107,50 +113,142 @@ knowledge = {
 "ai detection":"AI detects cancer faster and more accurately."
 }
 
+
+
+# -------------------- HOSPITAL DATA --------------------
 hospitals = {
- "delhi":"AIIMS Delhi",
- "mumbai":"Tata Memorial Mumbai",
- "chennai":"Apollo Chennai",
- "trivandrum":"RCC Trivandrum"
+    "delhi": "AIIMS Delhi",
+    "mumbai": "Tata Memorial Mumbai",
+    "chennai": "Apollo Chennai",
+    "trivandrum": "RCC Trivandrum"
 }
 
-# ---------- PDF ----------
-def create_pdf(stage):
-    file_path = "medical_report.pdf"
-    c = canvas.Canvas(file_path, pagesize=A4)
-    c.drawString(100,800,"AI MEDICAL REPORT")
-    c.drawString(100,770,f"Detected Stage : {stage}")
-    c.drawString(100,740,"Follow doctor advice & healthy diet.")
-    c.save()
-    return file_path
+def chatbot(query, stage=None):
+    raw = query.lower()
 
-# ---------- CHATBOT ----------
-def chatbot(query, stage):
-    raw = query.lower().replace(" ","")
+    # Agar stage AI se detect hua hai
+    if stage and stage != "Stage Unknown":
+        raw += f" {stage.lower()}"
 
-    if "stage1" in raw:
-        return "Stage 1 is early cancer. Cure rate above 95%."
-    if "stage2" in raw:
-        return "Stage 2 requires surgery and radiation."
-    if "stage3" in raw:
-        return "Stage 3 needs chemotherapy, surgery and radiation."
-    if "stage4" in raw:
-        return "Stage 4 is advanced cancer."
 
-    for k in knowledge:
-        if k in raw:
-            return knowledge[k]
+    # ---- HOSPITAL QUESTIONS FIRST ----
+    if "hospital" in raw:
+        for city in hospitals:
+            if city in raw:
+                return f"Best cancer hospital in {city.title()} is {hospitals[city]}"
+        return "Please mention a city like Delhi, Mumbai, Chennai or Trivandrum."
 
-    if "hospitalin" in raw:
-        city = raw.split("hospitalin")[-1]
-        return hospitals.get(city,"City not found")
+    # ---- STAGE QUESTIONS ----
+    if "stage 1" in raw or "stage1" in raw:
+        return (
+    "STAGE 1 BREAST CANCER (EARLY & HIGHLY CURABLE)\n\n"
+    "WHAT IS HAPPENING:\n"
+    "• Tumor is very small and limited to the breast\n"
+    "• Cancer has NOT spread to lymph nodes or organs\n"
+    "• Often detected through screening or self-exam\n\n"
+    "TREATMENT REALITY:\n"
+    "• Surgery is the main treatment (lumpectomy or mastectomy)\n"
+    "• Radiation may be required\n"
+    "• Chemotherapy usually NOT required\n\n"
+    "SURVIVAL & TRUTH:\n"
+    "• Survival rate above 95%\n"
+    "• Most patients live a normal life after treatment\n\n"
+    "PRECAUTIONS:\n"
+    "• Never delay surgery\n"
+    "• Regular follow-up every 6 months\n"
+    "• Avoid smoking, alcohol, and stress\n\n"
+    "FOOD & LIFESTYLE:\n"
+    "• Eat green vegetables, fruits, turmeric, garlic\n"
+    "• Avoid junk food, sugar, red meat\n"
+    "• Daily walking, yoga, meditation\n\n"
+    "BEST HOSPITALS:\n"
+    "• AIIMS Delhi\n"
+    "• Tata Memorial Mumbai\n"
+    "• Apollo Chennai"
+)
 
-    if "generatereport" in raw:
-        return create_pdf(stage)
+    if "stage 2" in raw or "stage2" in raw:
+        return (
+            "STAGE 2 BREAST CANCER (LOCALLY ADVANCED)\n\n"
+            "WHAT IS HAPPENING:\n"
+            "• Tumor is larger or cancer has spread to nearby lymph nodes\n"
+            "• Still confined to breast region\n\n"
+            "TREATMENT REALITY:\n"
+        "• Surgery is mandatory\n"
+        "• Chemotherapy is commonly required\n"
+        "• Radiation therapy after surgery\n\n"
+        "SURVIVAL & TRUTH:\n"
+        "• High survival rate with early treatment\n"
+        "• Delay can push cancer to stage 3\n\n"
+        "PRECAUTIONS:\n"
+        "• Follow full chemo cycle, do NOT stop midway\n"
+        "• Maintain immunity and nutrition\n"
+        "• Mental health support is important\n\n"
+        "FOOD & LIFESTYLE:\n"
+        "• High-protein diet (dal, eggs, nuts)\n"
+        "• Fresh fruits, beetroot, pomegranate\n"
+        "• Avoid outside food and infections\n\n"
+        "BEST HOSPITALS:\n"
+        "• Tata Memorial Mumbai\n"
+        "• AIIMS Delhi\n"
+        "• Regional Cancer Centres (RCC)"
+    )
+
+    if "stage 3" in raw or "stage3" in raw:
+        return (
+        "STAGE 3 BREAST CANCER (SERIOUS BUT TREATABLE)\n\n"
+        "WHAT IS HAPPENING:\n"
+        "• Cancer has spread to multiple lymph nodes\n"
+        "• May involve chest wall or skin\n\n"
+        "TREATMENT REALITY:\n"
+        "• Chemotherapy FIRST (before surgery)\n"
+        "• Major surgery after tumor shrinkage\n"
+        "• Radiation therapy mandatory\n\n"
+        "SURVIVAL & TRUTH:\n"
+        "• Cure is possible, but treatment is long and exhausting\n"
+        "• Discipline decides survival\n\n"
+        "PRECAUTIONS:\n"
+        "• Never skip chemotherapy sessions\n"
+        "• Prevent infections aggressively\n"
+        "• Emotional support is critical\n\n"
+        "FOOD & LIFESTYLE:\n"
+        "• Liquid foods during chemo if needed\n"
+        "• Protein shakes, soups, fruits\n"
+        "• Avoid raw food during low immunity\n\n"
+        "BEST HOSPITALS:\n"
+        "• Tata Memorial Mumbai\n"
+        "• AIIMS Delhi\n"
+        "• Apollo Cancer Centres"
+    )
+    if "stage 4" in raw or "stage4" in raw:
+        return (
+            "STAGE 4 BREAST CANCER (METASTATIC & LIFE-CHANGING)\n\n"
+        "WHAT IS HAPPENING:\n"
+        "• Cancer has spread to organs like bone, liver, lung or brain\n"
+        "• Disease is systemic, not localized\n\n"
+        "TREATMENT REALITY:\n"
+        "• Cancer is NOT fully curable\n"
+        "• Treatment focuses on control, not cure\n"
+        "• Long-term medicines, chemo, targeted therapy\n\n"
+        "SURVIVAL & TRUTH:\n"
+        "• Patients can live years with proper treatment\n"
+        "• Quality of life becomes the priority\n\n"
+        "PRECAUTIONS:\n"
+        "• Never stop treatment without doctor advice\n"
+        "• Pain management is essential\n"
+        "• Mental & family support is crucial\n\n"
+        "FOOD & LIFESTYLE:\n"
+        "• Easy-to-digest foods\n"
+        "• Avoid sugar spikes and dehydration\n"
+        "• Focus on comfort, nutrition, and peace\n\n"
+        "BEST HOSPITALS:\n"
+        "• Tata Memorial Mumbai\n"
+        "• AIIMS Delhi\n"
+        "• Advanced Oncology Centres"
+    )
+    # ---------- KNOWLEDGE SEARCH ----------
+    for key in knowledge:
+        if key in raw:
+            return knowledge[key]
 
     return "Please ask a breast cancer related question."
-
-def cleanup_audio():
-    for file in os.listdir():
-        if file.startswith("response_") and file.endswith(".mp3"):
-            os.remove(file)
