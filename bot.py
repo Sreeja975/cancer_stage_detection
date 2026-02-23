@@ -4,7 +4,6 @@ import os
 import io
 
 def text_to_speech(text):
-    def text_to_speech(text):
     tts = gTTS(text)
     audio_bytes = io.BytesIO()
     tts.write_to_fp(audio_bytes)
