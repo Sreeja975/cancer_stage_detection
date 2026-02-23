@@ -308,17 +308,28 @@ if uploaded_file:
 st.divider()
 st.subheader("🎤 Voice Assistant")
 
+# -------------------- CONFIGURATION --------------------
+
 RTC_CONFIGURATION = RTCConfiguration(
     {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 )
 
 audio_queue = queue.Queue()
+sample_rate_holder = {"rate": None}
 recognizer = sr.Recognizer()
+
+# -------------------- AUDIO CALLBACK --------------------
 
 def audio_frame_callback(frame: av.AudioFrame):
     audio = frame.to_ndarray()
     audio_queue.put(audio)
+
+    # Store real sample rate
+    sample_rate_holder["rate"] = frame.sample_rate
+
     return frame
+
+# -------------------- WEBRTC STREAM --------------------
 
 webrtc_ctx = webrtc_streamer(
     key="speech-to-text",
@@ -328,33 +339,53 @@ webrtc_ctx = webrtc_streamer(
     audio_frame_callback=audio_frame_callback,
 )
 
+# -------------------- PROCESS BUTTON --------------------
+
 if st.button("Process Speech"):
 
-    if not audio_queue.empty():
+    if audio_queue.empty():
+        st.warning("⚠️ No audio recorded yet. Click START and speak first.")
+    else:
 
-        audio_data = b""
+        st.info("Processing speech...")
+
+        audio_bytes = b""
 
         while not audio_queue.empty():
             chunk = audio_queue.get()
-            audio_data += chunk.tobytes()
+            audio_bytes += chunk.tobytes()
 
-        audio_source = sr.AudioData(audio_data, sample_rate=48000, sample_width=2)
+        sample_rate = sample_rate_holder["rate"] or 48000
+
+        audio_data = sr.AudioData(
+            audio_bytes,
+            sample_rate=sample_rate,
+            sample_width=2
+        )
 
         try:
-            query = recognizer.recognize_google(audio_source)
-            st.write("Patient:", query)
+            # Convert speech to text
+            query = recognizer.recognize_google(audio_data)
+            st.write("🧑 Patient:", query)
 
+            # Get chatbot response
             response = chatbot(query, st.session_state["stage"])
-            st.success("AI Doctor: " + response)
+            st.success("🩺 AI Doctor: " + response)
 
+            # Convert response to speech
             audio_file = text_to_speech(response)
             st.audio(audio_file)
 
-        except:
-            st.error("Speech not recognized")
+        except sr.UnknownValueError:
+            st.error("❌ Could not understand audio.")
+        except sr.RequestError:
+            st.error("❌ Speech recognition service unavailable.")
+        except Exception as e:
+            st.error(f"Unexpected error: {e}")
 
-    else:
-        st.warning("No audio recorded yet.")
+        # Clear buffer after processing
+        while not audio_queue.empty():
+            audio_queue.get()
         
 # =====================================================
 # PDF REPORT
