@@ -10,6 +10,11 @@ import numpy as np
 import base64
 import tempfile
 import os
+from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
+import av
+import speech_recognition as sr
+import queue
+import threading
 
 from PIL import Image as PILImage
 from torchvision import transforms, models
@@ -303,65 +308,54 @@ if uploaded_file:
 st.divider()
 st.subheader("🎤 Voice Assistant")
 
+RTC_CONFIGURATION = RTCConfiguration(
+    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+)
+
+audio_queue = queue.Queue()
 recognizer = sr.Recognizer()
 
+def audio_frame_callback(frame: av.AudioFrame):
+    audio = frame.to_ndarray()
+    audio_queue.put(audio)
+    return frame
 
-if st.button("Speak"):
+webrtc_ctx = webrtc_streamer(
+    key="speech-to-text",
+    mode=WebRtcMode.SENDONLY,
+    rtc_configuration=RTC_CONFIGURATION,
+    media_stream_constraints={"audio": True, "video": False},
+    audio_frame_callback=audio_frame_callback,
+)
 
-    with sr.Microphone() as source:
+if st.button("Process Speech"):
 
-        st.info("Listening...")
+    if not audio_queue.empty():
 
-        recognizer.adjust_for_ambient_noise(source)
+        audio_data = b""
 
-        audio = recognizer.listen(source)
+        while not audio_queue.empty():
+            chunk = audio_queue.get()
+            audio_data += chunk.tobytes()
 
+        audio_source = sr.AudioData(audio_data, sample_rate=48000, sample_width=2)
 
-    try:
+        try:
+            query = recognizer.recognize_google(audio_source)
+            st.write("Patient:", query)
 
-        query = recognizer.recognize_google(audio)
+            response = chatbot(query, st.session_state["stage"])
+            st.success("AI Doctor: " + response)
 
-        st.write("Patient:", query)
+            audio_file = text_to_speech(response)
+            st.audio(audio_file)
 
+        except:
+            st.error("Speech not recognized")
 
-        response = chatbot(
-            query,
-            st.session_state["stage"]
-        )
-
-
-        st.success("AI Doctor: " + response)
-
-
-        audio_file = text_to_speech(response)
-
-        with open(audio_file, "rb") as f:
-            audio_bytes = f.read()
-
-
-        b64 = base64.b64encode(audio_bytes).decode()
-
-
-        audio_html = f"""
-        <audio autoplay hidden>
-            <source src="data:audio/mp3;base64,{b64}">
-        </audio>
-        """
-
-
-        st.markdown(audio_html, unsafe_allow_html=True)
-
-
-        st.session_state["audio_responses"].append(response)
-
-        cleanup_audio()
-
-
-    except:
-
-        st.error("Speech not recognized")
-
-
+    else:
+        st.warning("No audio recorded yet.")
+        
 # =====================================================
 # PDF REPORT
 # =====================================================
