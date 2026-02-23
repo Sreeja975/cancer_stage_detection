@@ -297,7 +297,7 @@ if uploaded_file:
 
     st.subheader("Grad-CAM")
 
-    st.image(overlay, use_container_width=True)
+    st.image(overlay, width="stretch")
 
     st.session_state["gradcam_img"] = overlay
 st.markdown("""
