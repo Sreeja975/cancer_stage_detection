@@ -252,16 +252,3 @@ def chatbot(query, stage=None):
             return knowledge[key]
 
     return "Please ask a breast cancer related question."
-
-
-# -------------------- MAIN PROGRAM --------------------
-import streamlit as st
-
-st.title("Breast Cancer AI Chatbot")
-
-user_input = st.text_input("Ask your question:")
-
-if user_input:
-    response = chatbot(user_input)
-    st.write(response)
-    speak(response)
