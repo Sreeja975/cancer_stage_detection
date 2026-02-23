@@ -1,17 +1,29 @@
 from gtts import gTTS
-import tempfile
-import os
 import io
 
-def text_to_speech(text):
-    tts = gTTS(text)
-    audio_bytes = io.BytesIO()
-    tts.write_to_fp(audio_bytes)
-    audio_bytes.seek(0)
-    return audio_bytes.read()
+
+# =====================================================
+# TEXT TO SPEECH (Streamlit Cloud Ready)
+# =====================================================
+
+def text_to_speech(text: str):
+    try:
+        tts = gTTS(text=text, lang="en")
+
+        audio_buffer = io.BytesIO()
+        tts.write_to_fp(audio_buffer)
+
+        audio_buffer.seek(0)
+
+        return audio_buffer.getvalue()  # return raw bytes
+
+    except Exception as e:
+        print("TTS Error:", e)
+        return None
 
 
 def cleanup_audio():
+    # Not needed anymore (no temp files used)
     pass
 
 

@@ -11,11 +11,6 @@ import base64
 import tempfile
 import os
 import time
-from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
-import av
-import speech_recognition as sr
-import queue
-import threading
 
 from PIL import Image as PILImage
 from torchvision import transforms, models
@@ -334,84 +329,32 @@ st.markdown("""
 st.divider()
 st.subheader("🎤 AI Voice Doctor")
 
-# RTC config
-RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-)
+audio = st.audio_input("Speak your question")
 
-# Session state init
-if "voice_processed" not in st.session_state:
-    st.session_state.voice_processed = False
+if audio is not None:
 
-audio_queue = queue.Queue()
-recognizer = sr.Recognizer()
+    recognizer = sr.Recognizer()
 
-# Audio frame callback
-def audio_frame_callback(frame: av.AudioFrame):
-    audio = frame.to_ndarray()
-    audio_queue.put(audio)
-    return frame
+    audio_bytes = audio.read()
 
-# Start WebRTC
-webrtc_ctx = webrtc_streamer(
-    key="voice-doctor",
-    mode=WebRtcMode.SENDONLY,
-    rtc_configuration=RTC_CONFIGURATION,
-    media_stream_constraints={"audio": True, "video": False},
-    audio_frame_callback=audio_frame_callback,
-)
+    audio_data = sr.AudioData(
+        audio_bytes,
+        sample_rate=audio.sample_rate,
+        sample_width=2
+    )
 
-# Listening indicator
-if webrtc_ctx.state.playing:
-    st.markdown("### 🎙 Listening... Speak now")
+    try:
+        query = recognizer.recognize_google(audio_data)
+        st.write("🧑 Patient:", query)
 
-# AUTO PROCESS AFTER 4 SECONDS
-if webrtc_ctx.state.playing and not st.session_state.voice_processed:
+        response = chatbot(query, st.session_state["stage"])
+        st.success("🩺 AI Doctor: " + response)
 
-    time.sleep(4)  # record duration
+        audio_bytes = text_to_speech(response)
+        st.audio(audio_bytes, format="audio/mp3")
 
-    if not audio_queue.empty():
-
-        audio_data = b""
-
-        while not audio_queue.empty():
-            chunk = audio_queue.get()
-            audio_data += chunk.tobytes()
-
-        audio_source = sr.AudioData(
-            audio_data,
-            sample_rate=48000,
-            sample_width=2
-        )
-
-        try:
-            query = recognizer.recognize_google(audio_source)
-            st.write("🧑 Patient:", query)
-
-            response = chatbot(query, st.session_state["stage"])
-            st.success("🩺 AI Doctor: " + response)
-
-            # Generate TTS
-            audio_bytes = text_to_speech(response)
-            st.session_state.voice_audio = audio_bytes
-
-            # Play audio safely
-            if "voice_audio" in st.session_state:
-                st.audio(st.session_state.voice_audio, format="audio/mp3")
-        except Exception:
-            st.error("Speech not recognized")
-
-    else:
-        st.warning("No audio detected")
-
-    # STOP listening
-    st.session_state.voice_processed = True
-    st.rerun()
-
-# Reset button
-if st.button("🎤 Ask Again"):
-    st.session_state.voice_processed = False
-    st.rerun()
+    except Exception as e:
+        st.error("Speech not recognized")
         
 # =====================================================
 # PDF REPORT
