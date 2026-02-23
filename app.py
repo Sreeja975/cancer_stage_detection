@@ -389,11 +389,15 @@ if webrtc_ctx.state.playing and not st.session_state.voice_processed:
             st.write("🧑 Patient:", query)
 
             response = chatbot(query, st.session_state["stage"])
-            st.success("👩‍⚕ AI Doctor: " + response)
+            st.success("🩺 AI Doctor: " + response)
 
-            audio_file = text_to_speech(response)
-            st.audio(audio_file)
+            # Generate TTS
+            audio_bytes = text_to_speech(response)
+            st.session_state.voice_audio = audio_bytes
 
+            # Play audio safely
+            if "voice_audio" in st.session_state:
+                st.audio(st.session_state.voice_audio, format="audio/mp3")
         except Exception:
             st.error("Speech not recognized")
 
