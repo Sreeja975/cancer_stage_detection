@@ -299,20 +299,59 @@ if uploaded_file:
     st.image(overlay, use_container_width=True)
 
     st.session_state["gradcam_img"] = overlay
+st.markdown("""
+<style>
+.listening-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #ff4b4b;
+}
 
+.pulse-dot {
+    width: 12px;
+    height: 12px;
+    background-color: #ff4b4b;
+    border-radius: 50%;
+    animation: pulse 1.2s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.6); opacity: 0.4; }
+    100% { transform: scale(1); opacity: 1; }
+}
+</style>
+""", unsafe_allow_html=True)
 
 # =====================================================
 # VOICE ASSISTANT
 # =====================================================
 
-st.divider()
-st.subheader("🎤 Voice Assistant (Auto Mode)")
+# =====================================================
+# VOICE ASSISTANT (AUTO + ANIMATED)
+# =====================================================
 
-import queue
-import av
-import speech_recognition as sr
-from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
+st.divider()
+st.subheader("🎤 Voice Assistant")
+
 import numpy as np
+
+# ---------------- SESSION STATE INIT ----------------
+
+if "recorded_chunks" not in st.session_state:
+    st.session_state.recorded_chunks = []
+
+if "silence_counter" not in st.session_state:
+    st.session_state.silence_counter = 0
+
+if "sample_rate" not in st.session_state:
+    st.session_state.sample_rate = 48000
+
+if "processing" not in st.session_state:
+    st.session_state.processing = False
 
 # ---------------- CONFIG ----------------
 
@@ -320,32 +359,25 @@ RTC_CONFIGURATION = RTCConfiguration(
     {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 )
 
-audio_queue = queue.Queue()
-sample_rate_holder = {"rate": None}
 recognizer = sr.Recognizer()
 
-# Silence detection settings
-SILENCE_THRESHOLD = 500       # lower = more sensitive
-SILENCE_CHUNKS = 25           # number of silent frames before auto-process
-
-silence_counter = 0
-recorded_chunks = []
+SILENCE_THRESHOLD = 500
+SILENCE_CHUNKS = 25
 
 # ---------------- AUDIO CALLBACK ----------------
 
 def audio_frame_callback(frame: av.AudioFrame):
-    global silence_counter, recorded_chunks
 
     audio = frame.to_ndarray()
-    sample_rate_holder["rate"] = frame.sample_rate
+    st.session_state.sample_rate = frame.sample_rate
 
     volume = np.abs(audio).mean()
 
     if volume > SILENCE_THRESHOLD:
-        recorded_chunks.append(audio)
-        silence_counter = 0
+        st.session_state.recorded_chunks.append(audio)
+        st.session_state.silence_counter = 0
     else:
-        silence_counter += 1
+        st.session_state.silence_counter += 1
 
     return frame
 
@@ -359,46 +391,63 @@ webrtc_ctx = webrtc_streamer(
     audio_frame_callback=audio_frame_callback,
 )
 
+# ---------------- UI STATES ----------------
+
+if webrtc_ctx.state.playing and not st.session_state.processing:
+
+    # 🔴 Animated Listening Indicator
+    st.markdown("""
+    <div class="listening-container">
+        <div class="pulse-dot"></div>
+        Listening...
+    </div>
+    """, unsafe_allow_html=True)
+
 # ---------------- AUTO PROCESS ----------------
 
-if webrtc_ctx.state.playing:
+if (
+    webrtc_ctx.state.playing
+    and st.session_state.silence_counter > SILENCE_CHUNKS
+    and len(st.session_state.recorded_chunks) > 0
+    and not st.session_state.processing
+):
 
-    if silence_counter > SILENCE_CHUNKS and len(recorded_chunks) > 0:
+    st.session_state.processing = True
+    st.info("Processing speech...")
 
-        st.info("Processing speech automatically...")
+    audio_bytes = b"".join(
+        chunk.tobytes() for chunk in st.session_state.recorded_chunks
+    )
 
-        audio_bytes = b""
-        for chunk in recorded_chunks:
-            audio_bytes += chunk.tobytes()
+    audio_data = sr.AudioData(
+        audio_bytes,
+        sample_rate=st.session_state.sample_rate,
+        sample_width=2
+    )
 
-        sample_rate = sample_rate_holder["rate"] or 48000
+    try:
+        query = recognizer.recognize_google(audio_data)
+        st.write("🧑 Patient:", query)
 
-        audio_data = sr.AudioData(
-            audio_bytes,
-            sample_rate=sample_rate,
-            sample_width=2
-        )
+        response = chatbot(query, st.session_state["stage"])
+        st.success("🩺 AI Doctor: " + response)
 
-        try:
-            query = recognizer.recognize_google(audio_data)
-            st.write("🧑 Patient:", query)
+        audio_file = text_to_speech(response)
+        st.audio(audio_file)
 
-            response = chatbot(query, st.session_state["stage"])
-            st.success("🩺 AI Doctor: " + response)
+        st.session_state["audio_responses"].append(response)
 
-            audio_file = text_to_speech(response)
-            st.audio(audio_file)
+    except sr.UnknownValueError:
+        st.error("Could not understand audio.")
+    except sr.RequestError:
+        st.error("Speech recognition service unavailable.")
+    except Exception as e:
+        st.error(f"Error: {e}")
 
-        except sr.UnknownValueError:
-            st.error("Could not understand audio.")
-        except sr.RequestError:
-            st.error("Speech recognition service unavailable.")
-        except Exception as e:
-            st.error(f"Error: {e}")
-
-        # Reset buffers after processing
-        recorded_chunks.clear()
-        silence_counter = 0
+    # RESET CLEANLY
+    st.session_state.recorded_chunks = []
+    st.session_state.silence_counter = 0
+    st.session_state.processing = False
         
 # =====================================================
 # PDF REPORT
