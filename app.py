@@ -10,6 +10,7 @@ import numpy as np
 import base64
 import tempfile
 import os
+import time
 from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
 import av
 import speech_recognition as sr
@@ -184,7 +185,7 @@ if uploaded_file:
 
     image = PILImage.open(uploaded_file).convert("RGB")
 
-    st.image(image, caption="Uploaded Image", use_container_width=True)
+    st.image(image, caption="Uploaded Image", width="stretch")
 
 
     input_tensor = transform(image).unsqueeze(0).to(device)
@@ -327,127 +328,86 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =====================================================
-# VOICE ASSISTANT
-# =====================================================
-
-# =====================================================
 # VOICE ASSISTANT (AUTO + ANIMATED)
 # =====================================================
 
 st.divider()
-st.subheader("🎤 Voice Assistant")
+st.subheader("🎤 AI Voice Doctor")
 
-import numpy as np
-
-# ---------------- SESSION STATE INIT ----------------
-
-if "recorded_chunks" not in st.session_state:
-    st.session_state.recorded_chunks = []
-
-if "silence_counter" not in st.session_state:
-    st.session_state.silence_counter = 0
-
-if "sample_rate" not in st.session_state:
-    st.session_state.sample_rate = 48000
-
-if "processing" not in st.session_state:
-    st.session_state.processing = False
-
-# ---------------- CONFIG ----------------
-
+# RTC config
 RTC_CONFIGURATION = RTCConfiguration(
     {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 )
 
+# Session state init
+if "voice_processed" not in st.session_state:
+    st.session_state.voice_processed = False
+
+audio_queue = queue.Queue()
 recognizer = sr.Recognizer()
 
-SILENCE_THRESHOLD = 500
-SILENCE_CHUNKS = 25
-
-# ---------------- AUDIO CALLBACK ----------------
-
+# Audio frame callback
 def audio_frame_callback(frame: av.AudioFrame):
-
     audio = frame.to_ndarray()
-    st.session_state.sample_rate = frame.sample_rate
-
-    volume = np.abs(audio).mean()
-
-    if volume > SILENCE_THRESHOLD:
-        st.session_state.recorded_chunks.append(audio)
-        st.session_state.silence_counter = 0
-    else:
-        st.session_state.silence_counter += 1
-
+    audio_queue.put(audio)
     return frame
 
-# ---------------- WEBRTC ----------------
-
+# Start WebRTC
 webrtc_ctx = webrtc_streamer(
-    key="auto-speech",
+    key="voice-doctor",
     mode=WebRtcMode.SENDONLY,
     rtc_configuration=RTC_CONFIGURATION,
     media_stream_constraints={"audio": True, "video": False},
     audio_frame_callback=audio_frame_callback,
 )
 
-# ---------------- UI STATES ----------------
+# Listening indicator
+if webrtc_ctx.state.playing:
+    st.markdown("### 🎙 Listening... Speak now")
 
-if webrtc_ctx.state.playing and not st.session_state.processing:
+# AUTO PROCESS AFTER 4 SECONDS
+if webrtc_ctx.state.playing and not st.session_state.voice_processed:
 
-    # 🔴 Animated Listening Indicator
-    st.markdown("""
-    <div class="listening-container">
-        <div class="pulse-dot"></div>
-        Listening...
-    </div>
-    """, unsafe_allow_html=True)
+    time.sleep(4)  # record duration
 
-# ---------------- AUTO PROCESS ----------------
+    if not audio_queue.empty():
 
-if (
-    webrtc_ctx.state.playing
-    and st.session_state.silence_counter > SILENCE_CHUNKS
-    and len(st.session_state.recorded_chunks) > 0
-    and not st.session_state.processing
-):
+        audio_data = b""
 
-    st.session_state.processing = True
-    st.info("Processing speech...")
+        while not audio_queue.empty():
+            chunk = audio_queue.get()
+            audio_data += chunk.tobytes()
 
-    audio_bytes = b"".join(
-        chunk.tobytes() for chunk in st.session_state.recorded_chunks
-    )
+        audio_source = sr.AudioData(
+            audio_data,
+            sample_rate=48000,
+            sample_width=2
+        )
 
-    audio_data = sr.AudioData(
-        audio_bytes,
-        sample_rate=st.session_state.sample_rate,
-        sample_width=2
-    )
+        try:
+            query = recognizer.recognize_google(audio_source)
+            st.write("🧑 Patient:", query)
 
-    try:
-        query = recognizer.recognize_google(audio_data)
-        st.write("🧑 Patient:", query)
+            response = chatbot(query, st.session_state["stage"])
+            st.success("👩‍⚕ AI Doctor: " + response)
 
-        response = chatbot(query, st.session_state["stage"])
-        st.success("🩺 AI Doctor: " + response)
+            audio_file = text_to_speech(response)
+            st.audio(audio_file)
 
-        audio_file = text_to_speech(response)
-        st.audio(audio_file)
+        except Exception:
+            st.error("Speech not recognized")
 
-        st.session_state["audio_responses"].append(response)
+    else:
+        st.warning("No audio detected")
 
-    except sr.UnknownValueError:
-        st.error("Could not understand audio.")
-    except sr.RequestError:
-        st.error("Speech recognition service unavailable.")
-    except Exception as e:
-        st.error(f"Error: {e}")
+    # STOP listening
+    st.session_state.voice_processed = True
+    st.rerun()
 
-    # RESET CLEANLY
-    st.session_state.recorded_chunks = []
-    st.session_state.silence_counter = 0
-    st.session_state.processing = False
+# Reset button
+if st.button("🎤 Ask Again"):
+    st.session_state.voice_processed = False
+    st.rerun()
         
 # =====================================================
 # PDF REPORT
