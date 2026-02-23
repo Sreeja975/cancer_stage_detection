@@ -1,30 +1,35 @@
+import pyttsx3
+import os
+
+engine = pyttsx3.init()
+engine.setProperty('rate',150)
+
+
 from gtts import gTTS
-import io
+import tempfile
 
+def text_to_speech(text):
+    tts = gTTS(text)
+    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+    filename = tmp_file.name
+    tmp_file.close()
 
-# =====================================================
-# TEXT TO SPEECH (Streamlit Cloud Ready)
-# =====================================================
-
-def text_to_speech(text: str):
-    try:
-        tts = gTTS(text=text, lang="en")
-
-        audio_buffer = io.BytesIO()
-        tts.write_to_fp(audio_buffer)
-
-        audio_buffer.seek(0)
-
-        return audio_buffer.getvalue()  # return raw bytes
-
-    except Exception as e:
-        print("TTS Error:", e)
-        return None
-
+    tts.save(filename)
+    return filename
 
 def cleanup_audio():
-    # Not needed anymore (no temp files used)
     pass
+
+
+
+# -------------------- VOICE ENGINE --------------------
+engine = pyttsx3.init()
+engine.setProperty('rate', 150)
+
+def speak(text):
+    engine.stop()
+    engine.say(text)
+    engine.runAndWait()
 
 
 # -------------------- KNOWLEDGE BASE --------------------
@@ -247,3 +252,16 @@ def chatbot(query, stage=None):
             return knowledge[key]
 
     return "Please ask a breast cancer related question."
+
+
+# -------------------- MAIN PROGRAM --------------------
+import streamlit as st
+
+st.title("Breast Cancer AI Chatbot")
+
+user_input = st.text_input("Ask your question:")
+
+if user_input:
+    response = chatbot(user_input)
+    st.write(response)
+    speak(response)

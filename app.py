@@ -10,7 +10,6 @@ import numpy as np
 import base64
 import tempfile
 import os
-import time
 
 from PIL import Image as PILImage
 from torchvision import transforms, models
@@ -180,7 +179,7 @@ if uploaded_file:
 
     image = PILImage.open(uploaded_file).convert("RGB")
 
-    st.image(image, caption="Uploaded Image", width="stretch")
+    st.image(image, caption="Uploaded Image", use_container_width=True)
 
 
     input_tensor = transform(image).unsqueeze(0).to(device)
@@ -292,70 +291,77 @@ if uploaded_file:
 
     st.subheader("Grad-CAM")
 
-    st.image(overlay, width="stretch")
+    st.image(overlay, use_container_width=True)
 
     st.session_state["gradcam_img"] = overlay
-st.markdown("""
-<style>
-.listening-container {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 18px;
-    font-weight: 600;
-    color: #ff4b4b;
-}
 
-.pulse-dot {
-    width: 12px;
-    height: 12px;
-    background-color: #ff4b4b;
-    border-radius: 50%;
-    animation: pulse 1.2s infinite;
-}
-
-@keyframes pulse {
-    0% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.6); opacity: 0.4; }
-    100% { transform: scale(1); opacity: 1; }
-}
-</style>
-""", unsafe_allow_html=True)
 
 # =====================================================
-# VOICE ASSISTANT (AUTO + ANIMATED)
+# VOICE ASSISTANT
 # =====================================================
 
 st.divider()
-st.subheader("🎤 AI Voice Doctor")
+st.subheader("🎤 Voice Assistant")
 
-audio = st.audio_input("Speak your question")
+recognizer = sr.Recognizer()
 
-if audio is not None:
 
-    recognizer = sr.Recognizer()
+if st.button("Speak"):
 
-    audio_bytes = audio.read()
+    with sr.Microphone() as source:
 
-    audio_data = sr.AudioData(
-        audio_bytes,
-        sample_rate=audio.sample_rate,
-        sample_width=2
-    )
+        st.info("Listening...")
+
+        recognizer.adjust_for_ambient_noise(source)
+
+        audio = recognizer.listen(source)
+
 
     try:
-        query = recognizer.recognize_google(audio_data)
-        st.write("🧑 Patient:", query)
 
-        response = chatbot(query, st.session_state["stage"])
-        st.success("🩺 AI Doctor: " + response)
+        query = recognizer.recognize_google(audio)
 
-        audio_bytes = text_to_speech(response)
-        st.audio(audio_bytes, format="audio/mp3")
+        st.write("Patient:", query)
 
-    except Exception as e:
+
+        response = chatbot(
+            query,
+            st.session_state["stage"]
+        )
+
+
+        st.success("AI Doctor: " + response)
+
+
+        audio_file = text_to_speech(response)
+
+        with open(audio_file, "rb") as f:
+            audio_bytes = f.read()
+
+
+        b64 = base64.b64encode(audio_bytes).decode()
+
+
+        audio_html = f"""
+        <audio autoplay hidden>
+            <source src="data:audio/mp3;base64,{b64}">
+        </audio>
+        """
+
+
+        st.markdown(audio_html, unsafe_allow_html=True)
+
+
+        st.session_state["audio_responses"].append(response)
+
+        cleanup_audio()
+
+
+    except:
+
         st.error("Speech not recognized")
-        
+
+
 # =====================================================
 # PDF REPORT
 # =====================================================
