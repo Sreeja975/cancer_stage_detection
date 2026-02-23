@@ -306,9 +306,15 @@ if uploaded_file:
 # =====================================================
 
 st.divider()
-st.subheader("🎤 Voice Assistant")
+st.subheader("🎤 Voice Assistant (Auto Mode)")
 
-# -------------------- CONFIGURATION --------------------
+import queue
+import av
+import speech_recognition as sr
+from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
+import numpy as np
+
+# ---------------- CONFIG ----------------
 
 RTC_CONFIGURATION = RTCConfiguration(
     {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
@@ -318,41 +324,51 @@ audio_queue = queue.Queue()
 sample_rate_holder = {"rate": None}
 recognizer = sr.Recognizer()
 
-# -------------------- AUDIO CALLBACK --------------------
+# Silence detection settings
+SILENCE_THRESHOLD = 500       # lower = more sensitive
+SILENCE_CHUNKS = 25           # number of silent frames before auto-process
+
+silence_counter = 0
+recorded_chunks = []
+
+# ---------------- AUDIO CALLBACK ----------------
 
 def audio_frame_callback(frame: av.AudioFrame):
-    audio = frame.to_ndarray()
-    audio_queue.put(audio)
+    global silence_counter, recorded_chunks
 
-    # Store real sample rate
+    audio = frame.to_ndarray()
     sample_rate_holder["rate"] = frame.sample_rate
+
+    volume = np.abs(audio).mean()
+
+    if volume > SILENCE_THRESHOLD:
+        recorded_chunks.append(audio)
+        silence_counter = 0
+    else:
+        silence_counter += 1
 
     return frame
 
-# -------------------- WEBRTC STREAM --------------------
+# ---------------- WEBRTC ----------------
 
 webrtc_ctx = webrtc_streamer(
-    key="speech-to-text",
+    key="auto-speech",
     mode=WebRtcMode.SENDONLY,
     rtc_configuration=RTC_CONFIGURATION,
     media_stream_constraints={"audio": True, "video": False},
     audio_frame_callback=audio_frame_callback,
 )
 
-# -------------------- PROCESS BUTTON --------------------
+# ---------------- AUTO PROCESS ----------------
 
-if st.button("Process Speech"):
+if webrtc_ctx.state.playing:
 
-    if audio_queue.empty():
-        st.warning("⚠️ No audio recorded yet. Click START and speak first.")
-    else:
+    if silence_counter > SILENCE_CHUNKS and len(recorded_chunks) > 0:
 
-        st.info("Processing speech...")
+        st.info("Processing speech automatically...")
 
         audio_bytes = b""
-
-        while not audio_queue.empty():
-            chunk = audio_queue.get()
+        for chunk in recorded_chunks:
             audio_bytes += chunk.tobytes()
 
         sample_rate = sample_rate_holder["rate"] or 48000
@@ -364,28 +380,25 @@ if st.button("Process Speech"):
         )
 
         try:
-            # Convert speech to text
             query = recognizer.recognize_google(audio_data)
             st.write("🧑 Patient:", query)
 
-            # Get chatbot response
             response = chatbot(query, st.session_state["stage"])
             st.success("🩺 AI Doctor: " + response)
 
-            # Convert response to speech
             audio_file = text_to_speech(response)
             st.audio(audio_file)
 
         except sr.UnknownValueError:
-            st.error("❌ Could not understand audio.")
+            st.error("Could not understand audio.")
         except sr.RequestError:
-            st.error("❌ Speech recognition service unavailable.")
+            st.error("Speech recognition service unavailable.")
         except Exception as e:
-            st.error(f"Unexpected error: {e}")
+            st.error(f"Error: {e}")
 
-        # Clear buffer after processing
-        while not audio_queue.empty():
-            audio_queue.get()
+        # Reset buffers after processing
+        recorded_chunks.clear()
+        silence_counter = 0
         
 # =====================================================
 # PDF REPORT
