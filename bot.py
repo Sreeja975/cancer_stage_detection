@@ -1,16 +1,15 @@
 from gtts import gTTS
 import tempfile
 import os
+import io
 
 def text_to_speech(text):
+    def text_to_speech(text):
     tts = gTTS(text)
-
-    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
-    filename = tmp_file.name
-    tmp_file.close()
-
-    tts.save(filename)
-    return filename
+    audio_bytes = io.BytesIO()
+    tts.write_to_fp(audio_bytes)
+    audio_bytes.seek(0)
+    return audio_bytes.read()
 
 
 def cleanup_audio():
