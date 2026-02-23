@@ -1,15 +1,10 @@
-import pyttsx3
-import os
-
-engine = pyttsx3.init()
-engine.setProperty('rate',150)
-
-
 from gtts import gTTS
 import tempfile
+import os
 
 def text_to_speech(text):
     tts = gTTS(text)
+
     tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
     filename = tmp_file.name
     tmp_file.close()
@@ -17,19 +12,9 @@ def text_to_speech(text):
     tts.save(filename)
     return filename
 
+
 def cleanup_audio():
     pass
-
-
-
-# -------------------- VOICE ENGINE --------------------
-engine = pyttsx3.init()
-engine.setProperty('rate', 150)
-
-def speak(text):
-    engine.stop()
-    engine.say(text)
-    engine.runAndWait()
 
 
 # -------------------- KNOWLEDGE BASE --------------------
